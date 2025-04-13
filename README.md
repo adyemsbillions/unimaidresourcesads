@@ -81,6 +81,43 @@ You've successfully run and modified your React Native App. :partying_face:
 
 - If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
 - If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+   # or check this out
+  # 📱 Unimaid Resources Ads App
+
+A modern **React Native** Android application that loads `https://unimaidresources.com.ng` inside a webview with optimized **Google AdMob Ads** — **Interstitial Ads** and **Banner Ads**, and features including:
+
+- ✅ Interstitial ads shown on app open and every 15 mins interval
+- ✅ Banner ads visible at the bottom of the app
+- ✅ Pull-to-refresh for WebView
+- ✅ Offline detection and error handling
+- ✅ Back button exit confirmation
+- ✅ Production ready `.aab` file build for Play Store submission
+
+---
+
+## 🚀 Features
+
+- **React Native WebView**
+- **AdMob integration**:
+  - Interstitial Ad
+  - Banner Ad
+- **Exit App Confirmation** on back press
+- **Offline support** with friendly notice
+- **Smooth pull-to-refresh**
+- **Ad loading interval control** (every 15 minutes)
+- **Fully ready for production release**
+
+---
+
+## 📦 Dependencies
+
+Make sure to install these dependencies before running the project:
+
+```bash
+npm install
+npm install react-native-webview
+npm install react-native-google-mobile-ads
+npm install @react-native-community/netinfo
 
 # Troubleshooting
 
