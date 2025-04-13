@@ -1,4 +1,7 @@
 {
   "name": "AdMobInterstitialApp",
-  "displayName": "AdMobInterstitialApp"
+  "displayName": "UnimaidResources",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-8822060341834022~5419836302"
+  }
 }

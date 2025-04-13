@@ -1,131 +1,249 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
   View,
+  ActivityIndicator,
+  BackHandler,
+  StyleSheet,
+  PermissionsAndroid,
+  Platform,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
 } from 'react-native';
-
+import NetInfo from '@react-native-community/netinfo';
+import { WebView, WebViewNavigation } from 'react-native-webview';
 import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  InterstitialAd,
+  AdEventType,
+  BannerAd,
+  BannerAdSize,
+  MobileAds,
+} from 'react-native-google-mobile-ads';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+// ✅ Real AdMob unit IDs
+const interstitialUnitId = 'ca-app-pub-8822060341834022/1963644004';
+const bannerUnitId = 'ca-app-pub-8822060341834022/8240730325';
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+// ✅ Time control for interstitial ads
+let lastAdTime: number | null = null;
+
+export default function App() {
+  const [showWebView, setShowWebView] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+
+  const webViewRef = useRef<WebView>(null);
+
+  const interstitialRef = useRef(
+    InterstitialAd.createForAdRequest(interstitialUnitId, {
+      requestNonPersonalizedAdsOnly: true,
+    })
   );
-}
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  useEffect(() => {
+    const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected ?? true);
+    });
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    const initializeApp = async () => {
+      try {
+        if (Platform.OS === 'android') {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            {
+              title: 'External Storage Permission',
+              message: 'App needs access to your storage',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          console.log(
+            granted === PermissionsAndroid.RESULTS.GRANTED
+              ? '✅ Storage permission granted'
+              : '❌ Storage permission denied'
+          );
+        }
+
+        await MobileAds().initialize();
+        interstitialRef.current.load();
+      } catch (err) {
+        console.warn(err);
+      }
+    };
+
+    initializeApp();
+
+    return () => {
+      unsubscribeNetInfo();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = interstitialRef.current.addAdEventListener(
+      AdEventType.LOADED,
+      () => {
+        const now = Date.now();
+        if (!lastAdTime || now - lastAdTime >= 5 * 60 * 1000) {
+          console.log('✅ Showing interstitial ad');
+          interstitialRef.current.show();
+          lastAdTime = now;
+        } else {
+          console.log('🕒 Interstitial skipped, not enough time passed');
+          setShowWebView(true);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    const unsubscribeClose = interstitialRef.current.addAdEventListener(
+      AdEventType.CLOSED,
+      () => {
+        console.log('✅ Interstitial ad closed');
+        setShowWebView(true);
+        setIsLoading(false);
+        interstitialRef.current.load(); // Preload next
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      unsubscribeClose();
+    };
+  }, []);
+
+  useEffect(() => {
+    const backAction = () => {
+      if (showWebView && webViewRef.current && canGoBack) {
+        webViewRef.current.goBack();
+        return true;
+      } else {
+        Alert.alert(
+          'Exit App',
+          'Are you sure you want to exit the app?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Exit', onPress: () => BackHandler.exitApp() },
+          ],
+          { cancelable: true }
+        );
+        return true;
+      }
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [showWebView, canGoBack]);
+
+  const handleNavigationStateChange = (navState: WebViewNavigation) => {
+    setCanGoBack(navState.canGoBack);
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  const handleRefresh = () => {
+    setRefreshing(true);
+    webViewRef.current?.reload();
+    setTimeout(() => setRefreshing(false), 1000);
+  };
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+    <View style={styles.container}>
+      {showWebView ? (
+        isConnected ? (
+          <>
+            {isLoading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#7851A9" />
+              </View>
+            )}
+            <WebView
+              ref={webViewRef}
+              source={{ uri: 'https://unimaidresources.com.ng' }}
+              style={styles.webview}
+              onLoadStart={() => setIsLoading(true)}
+              onLoadEnd={() => setIsLoading(false)}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView error: ', nativeEvent);
+                setIsLoading(false);
+              }}
+              onNavigationStateChange={handleNavigationStateChange}
+              pullToRefreshEnabled={true} // ✅ enable native pull to refresh
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+              }
+            />
+          </>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.offlineContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
+          >
+            <Text style={styles.offlineText}>No Internet Connection</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )
+      ) : null}
+
+      {/* ✅ Banner ad at the bottom */}
+      <View style={styles.bannerContainer}>
+        <BannerAd
+          unitId={bannerUnitId}
+          size={BannerAdSize.FULL_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: { flex: 1 },
+  webview: { flex: 1 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'black',
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
   },
-  sectionDescription: {
-    marginTop: 8,
+  offlineContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  offlineText: {
     fontSize: 18,
-    fontWeight: '400',
+    marginBottom: 20,
+    color: 'black',
   },
-  highlight: {
-    fontWeight: '700',
+  retryButton: {
+    backgroundColor: '#7851A9',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
-
-export default App;
